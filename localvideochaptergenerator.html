@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Local Video Chapter Tool</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; background: #1e1e1e; color: #eee; height: 100vh; overflow: hidden; }
+    .container { display: flex; height: 100vh; }
+    .video-area { flex: 1; padding: 20px; display: flex; flex-direction: column; }
+    .sidebar { width: 440px; background: #2a2a2a; border-left: 1px solid #444; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; }
+    h1 { margin: 0 0 10px 0; color: #ff4d4d; }
+    #dropZone { border: 3px dashed #555; padding: 60px 20px; text-align: center; border-radius: 12px; cursor: pointer; background: #252525; margin-bottom: 20px; }
+    video { width: 100%; height: auto; max-height: calc(100vh - 340px); background: #000; border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,0.6); cursor: pointer; }
+    .custom-controls { background: #2a2a2a; padding: 18px 20px; border-radius: 10px; margin-top: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
+    .seek-container { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .time-display { font-family: monospace; font-size: 1.4em; font-weight: bold; min-width: 120px; color: #ffcc00; }
+    .transport-buttons { display: flex; justify-content: center; gap: 12px; margin: 12px 0; }
+    button { background: #444; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 8px; cursor: pointer; }
+    button:hover { background: #555; }
+    .play-btn { background: #ff4d4d; font-size: 20px; padding: 14px 32px; }
+    button.mark-btn { background: #ff4d4d; color: white; font-size: 17px; padding: 14px 32px; }
+    .chapter-list { list-style: none; padding: 0; margin: 0; flex: 1; }
+    .chapter-item { background: #333; margin: 8px 0; padding: 12px 16px; border-radius: 8px; display: flex; align-items: center; gap: 6px; transition: all 0.2s; position: relative; }
+    .chapter-item:hover { background: #3a3a3a; }
+    .chapter-item.active { background: #3a3224; border-left: 4px solid #ffcc00; padding-left: 12px; }
+    .timestamp { font-family: monospace; font-size: 1.05em; font-weight: bold; color: #ffcc00; width: 65px; padding: 4px 2px; text-align: center; cursor: pointer; }
+    .title { flex: 1; padding: 4px 8px; cursor: pointer; }
+    .title:focus { background: #444; outline: 1px solid #ff4d4d; }
+    .title:empty::before { content: "Type chapter description..."; color: #777; pointer-events: none; }
+    .duration-tag { font-size: 0.75em; color: #888; margin-right: 5px; font-family: monospace; }
+    .warning-icon { color: #ff4d4d; font-weight: bold; margin-right: 5px; cursor: help; }
+    .adjust-btn { opacity: 0; background: #555; color: #ddd; border: none; width: 20px; height: 20px; font-size: 12px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 4px; cursor: pointer; }
+    .chapter-item:hover .adjust-btn { opacity: 1; }
+    .play-chapter-btn { background: #4CAF50; color: white; border: none; padding: 6px 10px; border-radius: 50%; font-size: 14px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .delete-btn { background: #555; color: #ddd; padding: 5px 9px; font-size: 13px; border-radius: 4px; }
+    #importModal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; }
+    #importModalContent { background: #2a2a2a; padding: 20px; border-radius: 10px; width: 90%; max-width: 720px; }
+    #importTextarea { width: 100%; height: 420px; background: #1e1e1e; color: #eee; border: 1px solid #555; font-family: monospace; font-size: 15px; padding: 12px; border-radius: 6px; resize: vertical; }
+    .shortcuts-text { text-align: center; margin-top: 10px; font-size: 11px; color: #999; line-height: 1.5; user-select: none; }
+    .shortcuts-text strong { color: #ccc; }
+    .shortcuts-text kbd { display: inline-block; padding: 1px 5px; margin: 0 2px; background: #3a3a3a; border: 1px solid #555; border-radius: 4px; color: #fff; font-family: Consolas, monospace; font-size: 10px; }
+    .seek-bar-wrapper { flex: 1; display: flex; flex-direction: column; position: relative; min-width: 0; }
+    .seek-bar { width: 100%; height: 14px; accent-color: #ff4d4d; cursor: pointer; margin: 0; }
+    .timeline-viz { width: 100%; height: 6px; background: #333; margin-top: 2px; border-radius: 3px; overflow: hidden; cursor: pointer; }
+    .chapter-marker { position: absolute; top: 0; width: 4px; height: 100%; background: #ffcc00; pointer-events: auto; transform: translateX(-50%); cursor: pointer; }
+    .chapter-marker:hover::after { content: attr(data-title); position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); background: #000; color: #fff; padding: 4px 8px; font-size: 12px; white-space: nowrap; border-radius: 4px; z-index: 10; }
+    .playback-speed { margin-left: 10px; background: #444; color: white; padding: 5px; border-radius: 4px; }
+    .mini-btn { padding: 4px 8px; font-size: 12px; margin-bottom: 5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="video-area">
+      <h1>Local Video Chapter Tool</h1>
+      <div id="dropZone" title="Click to select a video file or drag and drop a video file here">
+        <p><strong>Drop video file here</strong><br>or click to select</p>
+        <input type="file" id="fileInput" accept="video/*" style="display:none;">
+      </div>
+      <div id="videoContainer" style="display:none; flex: 1; display: flex; flex-direction: column;">
+        <button id="closeBtn" onclick="closeVideo()" style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 10; background: rgba(0,0,0,0.6); border: 1px solid #555; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer;">
+          × Close Video
+        </button>
+        <video id="video" title="Click video to Play/Pause"></video>
+        <div class="custom-controls">
+          <div class="seek-container">
+            <span id="currentTime" class="time-display">0:00</span>
+            <div class="seek-bar-wrapper">
+              <input type="range" id="seekBar" class="seek-bar" value="0" min="0" step="0.1" title="Seek to a specific time">
+              <div class="timeline-viz" id="timelineViz" onclick="seekFromViz(event)"></div>
+            </div>
+            <span id="durationTime" class="time-display">0:00</span>
+          </div>
+          <div class="transport-buttons">
+            <button onclick="skip(-10)" title="Skip backward 10 seconds (J)">⤆ 10s</button>
+            <button class="play-btn" id="playPauseBtn" onclick="togglePlayPause()" title="Play or Pause the video (Space/K)">▶ Play</button>
+            <button onclick="skip(10)" title="Skip forward 10 seconds (L)">10s ⤇</button>
+            <select id="speedSelector" class="playback-speed" title="Set the playback speed" onchange="video.playbackRate = this.value">
+              <option value="0.5">0.5x</option>
+              <option value="1" selected>1x</option>
+              <option value="1.5">1.5x</option>
+              <option value="2">2x</option>
+              <option value="5">5x</option>
+              <option value="10">10x</option>
+            </select>
+          </div>
+          <div style="text-align:center; margin-top: 8px;">
+            <button class="mark-btn" onclick="addChapter()" title="Add a new chapter at the current video position (M)">📍 Mark Chapter (M)</button>
+            <div class="shortcuts-text">
+              <strong>Keyboard Shortcuts:</strong><br>
+              <kbd>Space</kbd>/<kbd>K</kbd> Play/Pause <kbd>J</kbd> −10s <kbd>L</kbd> +10s <kbd>,</kbd> Prev Frame <kbd>.</kbd> Next Frame <kbd>M</kbd> Mark Chapter <kbd>Ctrl+Z</kbd> Undo <kbd>Ctrl+Y</kbd> Redo
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="sidebar">
+      <h2>Chapters <span id="count">(0)</span></h2>
+      <button class="mini-btn" onclick="undo()">⟲ Undo</button>
+      <button class="mini-btn" onclick="redo()">⟳ Redo</button>
+      <button onclick="document.getElementById('importModal').style.display='flex'" title="Import a list of timestamps from a text file/paste" style="width:100%; margin-bottom:12px; padding:12px; background:#2196F3;">📥 Import Timestamps</button>
+      <ul id="chapterList" class="chapter-list"></ul>
+      <button onclick="copyChapters()" title="Copy the current chapter list in YouTube timestamp format" style="background:#4CAF50; color:white; width:100%; padding:14px; margin-bottom:8px;">📋 Copy for YouTube</button>
+      <button onclick="if(confirm('Clear all?')) {chapters=[]; renderChapters();}" title="Delete all chapters from the list" style="background:#666; color:white; width:100%; padding:10px;">Clear All</button>
+    </div>
+  </div>
+
+  <div id="importModal">
+    <div id="importModalContent">
+      <h3>Paste Timestamps (This will overwrite existing)</h3>
+      <textarea id="importTextarea" placeholder="0:00 Intro&#10;0:05:00 Scene 1"></textarea>
+      <div style="margin-top: 12px; text-align: right;">
+        <button onclick="document.getElementById('importModal').style.display='none'" title="Cancel the import" style="background:#666; margin-right:8px;">Cancel</button>
+        <button onclick="processImport()" title="Import the pasted timestamps">Import</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const video = document.getElementById('video'),
+      seekBar = document.getElementById('seekBar'),
+      currentTimeEl = document.getElementById('currentTime'),
+      durationTimeEl = document.getElementById('durationTime'),
+      playPauseBtn = document.getElementById('playPauseBtn'),
+      chaptersList = document.getElementById('chapterList');
+    let chapters = JSON.parse(localStorage.getItem('chapters') || '[]');
+    let isDragging = false;
+    let undoStack = [];
+    let redoStack = [];
+
+    function formatTime(s) {
+      const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
+      return h > 0 ? `${h}:${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}` : `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+    }
+
+    function formatDuration(s) {
+      const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+      return `${m}m ${sec}s`;
+    }
+
+    document.addEventListener('keydown', (e) => {
+      const active = document.activeElement;
+      if ((active && active.classList.contains('title')) || (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA'))) return;
+      if (e.ctrlKey && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+      if (e.ctrlKey && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
+      switch (e.key.toLowerCase()) {
+        case ' ': case 'k': e.preventDefault(); togglePlayPause(); break;
+        case 'm': e.preventDefault(); addChapter(); break;
+        case 'j': e.preventDefault(); skip(-10); break;
+        case 'l': e.preventDefault(); skip(10); break;
+        case ',': e.preventDefault(); video.currentTime -= 1 / 30; break;
+        case '.': e.preventDefault(); video.currentTime += 1 / 30; break;
+      }
+    });
+
+    video.onloadedmetadata = () => {
+      seekBar.max = video.duration;
+      durationTimeEl.textContent = formatTime(video.duration);
+      updateTimelineViz();
+    };
+    video.ontimeupdate = () => {
+      if (!isDragging) {
+        seekBar.value = video.currentTime;
+        currentTimeEl.textContent = formatTime(video.currentTime);
+      }
+      updateActiveChapter();
+    };
+    video.onerror = () => {
+      if (!video.src || video.src === "") return;
+      alert("Error: The selected file could not be played. Please select a valid video file.");
+      closeVideo();
+    };
+    seekBar.oninput = () => {
+      isDragging = true;
+      currentTimeEl.textContent = formatTime(seekBar.value);
+    };
+    seekBar.onchange = () => {
+      video.currentTime = seekBar.value;
+      isDragging = false;
+    };
+    video.onclick = togglePlayPause;
+
+    function updateTimelineViz() {
+      const viz = document.getElementById('timelineViz');
+      viz.innerHTML = '';
+      if (!video.duration) return;
+      chapters.forEach(ch => {
+        const marker = document.createElement('div');
+        marker.className = 'chapter-marker';
+        marker.setAttribute('data-title', ch.title || "Untitled");
+        const percent = (ch.seconds / video.duration) * 100;
+        marker.style.left = `${percent}%`;
+        marker.onclick = (e) => { e.stopPropagation(); video.currentTime = ch.seconds; };
+        viz.appendChild(marker);
+      });
+    }
+
+    function closeVideo() {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+      document.getElementById('videoContainer').style.display = 'none';
+      document.getElementById('dropZone').style.display = 'block';
+    }
+
+    function seekFromViz(e) {
+      const rect = e.target.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const percent = x / rect.width;
+      video.currentTime = percent * video.duration;
+    }
+
+    function saveState() {
+      undoStack.push(JSON.stringify(chapters));
+      redoStack = [];
+    }
+
+    function undo() {
+      if (undoStack.length > 0) {
+        redoStack.push(JSON.stringify(chapters));
+        chapters = JSON.parse(undoStack.pop());
+        renderChapters();
+      }
+    }
+
+    function redo() {
+      if (redoStack.length > 0) {
+        undoStack.push(JSON.stringify(chapters));
+        chapters = JSON.parse(redoStack.pop());
+        renderChapters();
+      }
+    }
+
+    function updateActiveChapter() {
+      const time = video.currentTime, active = chapters.findLastIndex(c => time >= c.seconds);
+      Array.from(chaptersList.children).forEach((el, i) => {
+        el.classList.toggle('active', i === active);
+        if (i === active) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+    }
+
+    function deleteChapter(index) {
+      saveState();
+      chapters.splice(index, 1);
+      renderChapters();
+    }
+
+    function handleChapterChange(index, field, newValue) {
+      saveState();
+      chapters[index][field] = newValue;
+      renderChapters();
+    }
+
+    function renderChapters() {
+      localStorage.setItem('chapters', JSON.stringify(chapters));
+      chaptersList.innerHTML = '';
+      document.getElementById('count').textContent = `(${chapters.length})`;
+      chapters.forEach((ch, i) => {
+        const li = document.createElement('li');
+        li.className = 'chapter-item';
+        const nextTime = i < chapters.length - 1 ? chapters[i + 1].seconds : (video.duration || ch.seconds);
+        const dur = formatDuration(nextTime - ch.seconds);
+        const isOutOfOrder = i > 0 && ch.seconds < chapters[i - 1].seconds;
+        li.innerHTML = `
+          ${isOutOfOrder ? '<span class="warning-icon" title="Out of order!">!</span>' : ''}
+          <span class="timestamp" contenteditable="true" spellcheck="false" title="Click to edit timestamp">${formatTime(ch.seconds)}</span>
+          <button class="adjust-btn" onclick="adjustTime(${i}, -1)" title="Decrease timestamp by 1s">−</button>
+          <button class="adjust-btn" onclick="adjustTime(${i}, 1)" title="Increase timestamp by 1s">+</button>
+          <span class="title" contenteditable="true" spellcheck="false" title="Click to edit title">${escapeHTML(ch.title || "")}</span>
+          <span class="duration-tag">${dur}</span>
+          <button class="play-chapter-btn" onclick="video.currentTime=${ch.seconds}; video.play();" title="Jump to this chapter">▶</button>
+          <button class="delete-btn" onclick="deleteChapter(${i})" title="Delete this chapter">🗑</button>
+        `;
+        const t = li.querySelector('.title');
+        t.onfocus = () => video.pause();
+        t.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); t.blur(); video.play(); } };
+        t.onblur = (e) => {
+          const newTitle = e.target.textContent.trim() || "Untitled Chapter";
+          if (ch.title !== newTitle) handleChapterChange(i, 'title', newTitle);
+        };
+        const ts = li.querySelector('.timestamp');
+        ts.onblur = (e) => {
+          const parts = e.target.textContent.split(':').map(Number).reverse();
+          const newSec = (parts[2] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[0] || 0);
+          if (!isNaN(newSec) && ch.seconds !== newSec) {
+            saveState();
+            ch.seconds = newSec;
+            chapters.sort((a, b) => a.seconds - b.seconds);
+            renderChapters();
+          } else {
+            e.target.textContent = formatTime(ch.seconds);
+          }
+        };
+        chaptersList.appendChild(li);
+      });
+      updateActiveChapter();
+      updateTimelineViz();
+    }
+
+    function escapeHTML(str) {
+      const p = document.createElement('p');
+      p.textContent = str;
+      return p.innerHTML;
+    }
+
+    function adjustTime(i, d) {
+      saveState();
+      chapters[i].seconds = Math.max(0, chapters[i].seconds + d);
+      chapters.sort((a, b) => a.seconds - b.seconds);
+      renderChapters();
+    }
+
+    function addChapter() {
+      saveState();
+      if (!video.paused) video.pause();
+      const newChapter = { seconds: Math.floor(video.currentTime), title: "" };
+      chapters.push(newChapter);
+      chapters.sort((a, b) => a.seconds - b.seconds);
+      renderChapters();
+      const titles = document.querySelectorAll('.title'), newestTitle = titles[chapters.indexOf(newChapter)];
+      if (newestTitle) {
+        newestTitle.focus();
+        const range = document.createRange(), selection = window.getSelection();
+        range.selectNodeContents(newestTitle); range.collapse(false);
+        selection.removeAllRanges(); selection.addRange(range);
+      }
+    }
+
+    function skip(d) { video.currentTime += d; }
+
+    function togglePlayPause() {
+      video.paused ? video.play() : video.pause();
+      playPauseBtn.textContent = video.paused ? '▶ Play' : '⏸ Pause';
+    }
+
+    document.getElementById('fileInput').onchange = (e) => {
+      video.src = URL.createObjectURL(e.target.files[0]);
+      document.getElementById('videoContainer').style.display = 'flex';
+      document.getElementById('dropZone').style.display = 'none';
+      document.getElementById('closeBtn').style.display = 'block';
+    };
+
+    document.getElementById('dropZone').onclick = () => document.getElementById('fileInput').click();
+
+    function processImport() {
+      const input = document.getElementById('importTextarea').value;
+      const newChapters = [];
+      input.split('\n').forEach(line => {
+        const match = line.match(/(\d+:\d+(?::\d+)?)\s*(.*)/);
+        if (match) {
+          const parts = match[1].split(':').map(Number).reverse();
+          newChapters.push({ 
+            seconds: (parts[2] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[0] || 0), 
+            title: (match[2] || "Imported").trim() 
+          });
+        }
+      });
+      if (newChapters.length === 0) {
+        alert("No valid timestamps found. Please check your format (e.g., '0:00 Chapter Title')");
+        return;
+      }
+      saveState();
+      chapters = newChapters.sort((a, b) => a.seconds - b.seconds);
+      document.getElementById('importModal').style.display = 'none';
+      renderChapters();
+    }
+
+    function copyChapters() {
+      navigator.clipboard.writeText(chapters.map(c => `${formatTime(c.seconds)} ${c.title}`).join('\n')).then(() => alert("Copied!"));
+    }
+    renderChapters();
+  </script>
+</body>
+</html>
